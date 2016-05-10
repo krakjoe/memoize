@@ -48,6 +48,7 @@ int php_memoize_reserved;
 #define PHP_MEMOIZE_INFO_SET(f, i) do { \
 	php_memoize_info_t **_i = (php_memoize_info_t**) &(f)->op_array.reserved[php_memoize_reserved]; \
 	*_i = (i); \
+	zend_hash_next_index_insert_ptr(&MG(info), i); \
 } while(0)
 
 zend_vm_func_f zend_return_function;
@@ -102,12 +103,13 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 	PHP_VAR_SERIALIZE_DESTROY(data);
 
 	if (EG(exception)) {
+		zval_ptr_dtor(&serial);
+		smart_str_free(&smart);
 		zend_clear_exception();
 		return NULL;
 	}
 
 	zval_ptr_dtor(&serial);
-
 	return smart.s;
 } /* }}} */
 
@@ -222,8 +224,9 @@ static int php_memoize_ucall(zend_execute_data *frame) {
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
 		zend_execute_data *call = frame->call;
 
-		frame->call = call->prev_execute_data;
+		zend_vm_stack_free_args(call);
 		zend_vm_stack_free_call_frame(call);
+
 		frame->opline = frame->opline + 1;
 
 		return ZEND_USER_OPCODE_LEAVE;
@@ -241,8 +244,9 @@ static int php_memoize_fcall(zend_execute_data *frame) {
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
 		zend_execute_data *call = frame->call;
 
-		frame->call = call->prev_execute_data;
+		zend_vm_stack_free_args(call);
 		zend_vm_stack_free_call_frame(call);
+
 		frame->opline = frame->opline + 1;
 
 		return ZEND_USER_OPCODE_LEAVE;
@@ -346,6 +350,11 @@ PHP_MSHUTDOWN_FUNCTION(memoize)
 }
 /* }}} */
 
+/* {{{ */
+static void php_memoize_info_dtor(zval *zv) {
+	efree(Z_PTR_P(zv));
+} /* }}} */
+
 /* {{{ PHP_RINIT_FUNCTION
  */
 PHP_RINIT_FUNCTION(memoize)
@@ -353,6 +362,8 @@ PHP_RINIT_FUNCTION(memoize)
 #if defined(COMPILE_DL_MEMOIZE) && defined(ZTS)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
+
+	zend_hash_init(&MG(info), 8, NULL, php_memoize_info_dtor, 0);
 
 	return SUCCESS;
 }
@@ -362,6 +373,7 @@ PHP_RINIT_FUNCTION(memoize)
  */
 PHP_RSHUTDOWN_FUNCTION(memoize)
 {
+	zend_hash_destroy(&MG(info));
 	return SUCCESS;
 }
 /* }}} */

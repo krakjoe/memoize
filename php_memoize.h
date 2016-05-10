@@ -40,6 +40,7 @@ extern zend_module_entry memoize_module_entry;
 #endif
 
 ZEND_BEGIN_MODULE_GLOBALS(memoize)
+	volatile zend_bool initialized;
 	struct {
 		zend_long segs;
 		zend_long size;
@@ -48,7 +49,7 @@ ZEND_BEGIN_MODULE_GLOBALS(memoize)
 		zend_bool smart;
 		zend_bool enabled;
 	} ini;
-	volatile zend_bool initialized;
+	HashTable info;
 ZEND_END_MODULE_GLOBALS(memoize)
 
 #ifdef ZTS
