@@ -181,6 +181,8 @@ static int php_memoize_ucall(zend_execute_data *frame) {
 	zend_execute_data *call = frame->call;
 
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
+		frame->call = call->prev_execute_data;
+		zend_vm_stack_free_call_frame(call);
 		frame->opline = frame->opline + 1;
 
 		return ZEND_USER_OPCODE_LEAVE;
@@ -198,6 +200,8 @@ static int php_memoize_fcall(zend_execute_data *frame) {
 	zend_execute_data *call = frame->call;
 
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
+		frame->call = call->prev_execute_data;
+		zend_vm_stack_free_call_frame(call);
 		frame->opline = frame->opline + 1;
 
 		return ZEND_USER_OPCODE_LEAVE;
