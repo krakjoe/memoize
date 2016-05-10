@@ -49,7 +49,6 @@ ZEND_BEGIN_MODULE_GLOBALS(memoize)
 		zend_bool enabled;
 	} ini;
 	volatile zend_bool initialized;
-	HashTable disabled;
 ZEND_END_MODULE_GLOBALS(memoize)
 
 #ifdef ZTS
