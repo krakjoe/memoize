@@ -220,7 +220,7 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) 
 } /* }}} */
 
 /* {{{ */
-static int php_memoize_leave_helper(zend_execute_data *frame) {
+static inline int php_memoize_leave_helper(zend_execute_data *frame) {
 	zend_execute_data *call = frame->call;
 	uint32_t info = ZEND_CALL_INFO(call);
 	
