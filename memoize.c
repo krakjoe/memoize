@@ -35,10 +35,12 @@
 typedef int (*zend_vm_func_f)(zend_execute_data *);
 
 typedef struct _php_memoize_info_t {
-	zend_bool  used;
-	zend_bool  disabled;
+	zend_uchar flags;
 	zend_ulong ttl;
 } php_memoize_info_t;
+
+#define PHP_MEMOIZE_USED     0x00000001
+#define PHP_MEMOIZE_DISABLED 0x00000010
 
 int php_memoize_reserved;
 
@@ -161,16 +163,16 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 					if (mem != NULL) {
 						sscanf(mem, 
 							"@memoize(%lu)", &info->ttl);
-						info->used = 1;
+						info->flags |= PHP_MEMOIZE_USED;
 					}
 				}
 			}
 
-			if (info->disabled) {
+			if (info->flags & PHP_MEMOIZE_DISABLED) {
 				return 0;
 			}
 
-			if (!info->used) {
+			if (!(info->flags & PHP_MEMOIZE_USED)) {
 				if ((check->common.fn_flags & ZEND_ACC_CLOSURE) || !check->common.prototype) {
 					return 0;
 				}
@@ -270,7 +272,7 @@ static int php_memoize_return(zend_execute_data *frame) {
 			if (EG(exception)) {
 				php_memoize_info_t *info = PHP_MEMOIZE_INFO(fbc);
 
-				info->disabled = 1;
+				info->flags |= PHP_MEMOIZE_DISABLED;
 
 				zend_clear_exception();
 			}
