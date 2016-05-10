@@ -285,6 +285,8 @@ static inline int php_memoize_leave_helper(zend_execute_data *frame) {
 		 OBJ_RELEASE((zend_object*)call->func->op_array.prototype);
 	}
 
+	frame->call = call->prev_execute_data;
+
 	zend_vm_stack_free_args(call);
 	zend_vm_stack_free_call_frame(call);
 
