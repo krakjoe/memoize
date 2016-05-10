@@ -62,8 +62,8 @@ ZEND_DECLARE_MODULE_GLOBALS(memoize);
 
 /* {{{ */
 PHP_INI_BEGIN()
-	STD_PHP_INI_ENTRY("memoize.enabled", "1", PHP_INI_SYSTEM, OnUpdateBool, ini.enabled, zend_memoize_globals, memoize_globals)
-	STD_PHP_INI_ENTRY("memoize.segs", "1", PHP_INI_SYSTEM, OnUpdateLong, ini.segs, zend_memoize_globals, memoize_globals)
+    STD_PHP_INI_ENTRY("memoize.enabled", "1", PHP_INI_SYSTEM, OnUpdateBool, ini.enabled, zend_memoize_globals, memoize_globals)
+    STD_PHP_INI_ENTRY("memoize.segs", "1", PHP_INI_SYSTEM, OnUpdateLong, ini.segs, zend_memoize_globals, memoize_globals)
     STD_PHP_INI_ENTRY("memoize.size", "32M", PHP_INI_SYSTEM, OnUpdateLong, ini.size, zend_memoize_globals, memoize_globals)
     STD_PHP_INI_ENTRY("memoize.entries", "4093", PHP_INI_SYSTEM, OnUpdateLong, ini.entries, zend_memoize_globals, memoize_globals)
     STD_PHP_INI_ENTRY("memoize.ttl", "0", PHP_INI_SYSTEM, OnUpdateLong, ini.ttl, zend_memoize_globals, memoize_globals)
@@ -159,12 +159,8 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 							ZSTR_VAL(check->op_array.doc_comment), "@memoize");
 
 					if (mem != NULL) {
-						sscanf(mem, "@memoize(%lu)", &info->ttl);
-
-						if (ttl) {
-							*ttl = info->ttl;
-						}
-
+						sscanf(mem, 
+							"@memoize(%lu)", &info->ttl);
 						info->used = 1;
 					}
 				}
@@ -179,6 +175,9 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 					return 0;
 				}
 			} else {
+				if (ttl && info->ttl) {
+					*ttl = info->ttl;
+				}
 				return 1;
 			}
 		}
