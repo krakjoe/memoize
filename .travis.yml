@@ -2,8 +2,10 @@ language: php
 php:
     - 7.0
     - nightly
+install:
+    - sudo pecl install apcu
 script:
     - phpize
     - ./configure
     - make
-    - REPORT_EXIT_STATUS=1 TEST_PHP_ARGS="-q --show-diff" make test
+    - REPORT_EXIT_STATUS=1 TEST_PHP_ARGS=" -q --show-diff" make test
