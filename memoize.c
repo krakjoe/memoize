@@ -119,10 +119,12 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 
 /* {{{ */
 static inline zend_string* php_memoize_scope(const zval *This, const zend_function *function) {
+	if (!function->common.scope) {
+		return NULL;
+	}
+
 	if (Z_TYPE_P(This) != IS_OBJECT) {
-		if (function->common.scope) {
-			return zend_string_copy(function->common.scope->name);
-		}
+		return zend_string_copy(function->common.scope->name);
 	} else {
 		smart_str smart = {0};
 		php_serialize_data_t data;
