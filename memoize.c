@@ -220,16 +220,28 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) 
 } /* }}} */
 
 /* {{{ */
+static int php_memoize_leave_helper(zend_execute_data *frame) {
+	zend_execute_data *call = frame->call;
+	uint32_t info = ZEND_CALL_INFO(call);
+	
+	if (info & ZEND_CALL_RELEASE_THIS) {
+		OBJ_RELEASE(Z_OBJ(call->This));
+	} else if (info & ZEND_CALL_CLOSURE) {
+		 OBJ_RELEASE((zend_object*)call->func->op_array.prototype);
+	}
+	
+	zend_vm_stack_free_args(call);
+	zend_vm_stack_free_call_frame(call);
+
+	frame->opline = frame->opline + 1;
+
+	return ZEND_USER_OPCODE_LEAVE;
+} /* }}} */
+
+/* {{{ */
 static int php_memoize_ucall(zend_execute_data *frame) {
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
-		zend_execute_data *call = frame->call;
-
-		zend_vm_stack_free_args(call);
-		zend_vm_stack_free_call_frame(call);
-
-		frame->opline = frame->opline + 1;
-
-		return ZEND_USER_OPCODE_LEAVE;
+		return php_memoize_leave_helper(frame);
 	}
 
 	if (zend_do_ucall_function) {
@@ -242,14 +254,7 @@ static int php_memoize_ucall(zend_execute_data *frame) {
 /* {{{ */
 static int php_memoize_fcall(zend_execute_data *frame) {
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
-		zend_execute_data *call = frame->call;
-
-		zend_vm_stack_free_args(call);
-		zend_vm_stack_free_call_frame(call);
-
-		frame->opline = frame->opline + 1;
-
-		return ZEND_USER_OPCODE_LEAVE;
+		return php_memoize_leave_helper(frame);
 	}
 
 	if (zend_do_fcall_function) {
