@@ -95,7 +95,7 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 } /* }}} */
 
 /* {{{ */
-static inline zend_string* php_memoize_key(zend_function *function, uint32_t argc, const zval *argv) {
+static inline zend_string* php_memoize_key(const zend_function *function, uint32_t argc, const zval *argv) {
 	zend_string *key;
 	zend_class_entry *scope = function->common.scope;
 	zend_string *name = function->common.function_name;
@@ -126,50 +126,55 @@ static inline zend_string* php_memoize_key(zend_function *function, uint32_t arg
 
 /* {{{ */
 static inline zend_bool php_memoize_is_memoizing(const zend_function *function, zend_ulong *ttl) {
+	const zend_function *check = function;
+
 	do {
-		if (function->type == ZEND_USER_FUNCTION) {
-			if (zend_hash_index_exists(&MG(disabled), (zend_long) function)) {
+		if (check->type == ZEND_USER_FUNCTION) {
+			if (zend_hash_index_exists(&MG(disabled), (zend_long) check)) {
 				return 0;
 			}
 
-			if (function->op_array.doc_comment && ZSTR_LEN(function->op_array.doc_comment) >= (sizeof("@memoize")-1)) {
+			if (check->op_array.doc_comment && ZSTR_LEN(check->op_array.doc_comment) >= (sizeof("@memoize")-1)) {
 				const char *mem = 
 					strstr(
-						ZSTR_VAL(function->op_array.doc_comment), "@memoize");
+						ZSTR_VAL(check->op_array.doc_comment), "@memoize");
 
 				if (mem != NULL) {
 					if (ttl) {
 						sscanf(mem, "@memoize(%lu)", ttl);
 					}
-					
 					return 1;
 				}
 			}
 		}
-	} while (function = function->common.prototype);
+	} while (!(check->common.fn_flags & ZEND_ACC_CLOSURE) && (check = check->common.prototype));
 
 	return 0;
 } /* }}} */
 
 /* {{{ */
-static inline zend_bool php_memoize_is_memoized(zend_execute_data *frame) {
-	zend_execute_data *call = frame->call;
+static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) {
+	const zend_execute_data *call = frame->call;
+	const zend_function *fbc = call->func;
 
-	if (call && php_memoize_is_memoizing(call->func, NULL)) {
+	if (call && php_memoize_is_memoizing(fbc, NULL)) {
 		const zend_op *opline = frame->opline;
 		zend_string *key = php_memoize_key(
-			frame->call->func,
+			fbc,
 			ZEND_CALL_NUM_ARGS(call), ZEND_CALL_ARG(call, 1));
-		zval *return_value = ZEND_CALL_VAR(frame, opline->result.var);
+		zval *return_value;
 
 		if (!key) {
 			return 0;
 		}
 
+		return_value = ZEND_CALL_VAR(frame, opline->result.var);
+
 		if (apc_cache_fetch(php_memoize_cache, key, sapi_get_request_time(), &return_value)) {
 			zend_string_release(key);
 			return 1;
 		}
+
 		zend_string_release(key);
 	}
 
@@ -178,9 +183,9 @@ static inline zend_bool php_memoize_is_memoized(zend_execute_data *frame) {
 
 /* {{{ */
 static int php_memoize_ucall(zend_execute_data *frame) {
-	zend_execute_data *call = frame->call;
-
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
+		zend_execute_data *call = frame->call;
+
 		frame->call = call->prev_execute_data;
 		zend_vm_stack_free_call_frame(call);
 		frame->opline = frame->opline + 1;
@@ -197,9 +202,9 @@ static int php_memoize_ucall(zend_execute_data *frame) {
 
 /* {{{ */
 static int php_memoize_fcall(zend_execute_data *frame) {
-	zend_execute_data *call = frame->call;
-
 	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
+		zend_execute_data *call = frame->call;
+
 		frame->call = call->prev_execute_data;
 		zend_vm_stack_free_call_frame(call);
 		frame->opline = frame->opline + 1;
