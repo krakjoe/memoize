@@ -5,7 +5,7 @@ memoize
 > In computing, memoization is an optimization technique used primarily to speed up computer programs by storing 
 > the results of expensive function calls and returning the cached result when the same inputs occur again.
 
-The ```memoize``` extention leverages ```[APCu](https://github.com/krakjoe/apcu)``` and Zend API to implement memoization for functions and methods in PHP.
+The ```memoize``` extention leverages [```APCu```](https://github.com/krakjoe/apcu) and Zend API to implement memoization for functions and methods in PHP.
 
 how?
 ====
