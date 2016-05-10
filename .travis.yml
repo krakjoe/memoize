@@ -10,7 +10,8 @@ script:
     - make
     - make install
     - cd ../
+    - rm -rf apcu
     - phpize
     - ./configure
     - make
-    - REPORT_EXIT_STATUS=1 TEST_PHP_ARGS=" -q --show-diff" TESTS=tests/*.phpt make test
+    - REPORT_EXIT_STATUS=1 TEST_PHP_ARGS="-q --show-diff" TESTS="tests/*.phpt" make test
