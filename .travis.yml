@@ -2,9 +2,14 @@ language: php
 php:
     - 7.0
     - nightly
-install:
-    - sudo pecl install apcu
 script:
+    - git clone https://github.com/krakjoe/apcu
+    - cd apcu
+    - phpize
+    - ./configure
+    - make
+    - make install
+    - cd ../
     - phpize
     - ./configure
     - make
