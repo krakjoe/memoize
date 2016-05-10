@@ -27,6 +27,7 @@
 #include "ext/standard/info.h"
 #include "ext/standard/php_var.h"
 #include "ext/apcu/apc_api.h"
+#include "ext/spl/spl_exceptions.h"
 #include "zend_smart_str.h"
 #include "zend_extensions.h"
 
@@ -54,6 +55,7 @@ int php_memoize_reserved;
 zend_vm_func_f zend_return_function;
 zend_vm_func_f zend_do_ucall_function;
 zend_vm_func_f zend_do_fcall_function;
+zend_vm_func_f zend_do_fcall_by_name_function;
 
 apc_sma_api_decl(php_memoize_sma);
 
@@ -163,7 +165,19 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 							ZSTR_VAL(check->op_array.doc_comment), "@memoize");
 
 					if (mem != NULL) {
-						sscanf(mem, 
+						if (check->common.fn_flags & ZEND_ACC_GENERATOR) {
+							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
+								"cannot memoize generator");
+							return 0;
+						}
+
+						if (check->common.fn_flags & ZEND_ACC_CTOR) {
+							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
+								"cannot memoize constructor");
+							return 0;
+						}
+
+						sscanf(mem,
 							"@memoize(%lu)", &info->ttl);
 						info->flags |= PHP_MEMOIZE_USED;
 					}
@@ -223,13 +237,13 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) 
 static inline int php_memoize_leave_helper(zend_execute_data *frame) {
 	zend_execute_data *call = frame->call;
 	uint32_t info = ZEND_CALL_INFO(call);
-	
+
 	if (info & ZEND_CALL_RELEASE_THIS) {
 		OBJ_RELEASE(Z_OBJ(call->This));
 	} else if (info & ZEND_CALL_CLOSURE) {
 		 OBJ_RELEASE((zend_object*)call->func->op_array.prototype);
 	}
-	
+
 	zend_vm_stack_free_args(call);
 	zend_vm_stack_free_call_frame(call);
 
@@ -259,6 +273,19 @@ static int php_memoize_fcall(zend_execute_data *frame) {
 
 	if (zend_do_fcall_function) {
 		return zend_do_fcall_function(frame);
+	}
+
+	return ZEND_USER_OPCODE_DISPATCH;
+} /* }}} */
+
+/* {{{ */
+static int php_memoize_fcall_by_name(zend_execute_data *frame) {
+	if (MG(ini.enabled) && php_memoize_is_memoized(frame)) {
+		return php_memoize_leave_helper(frame);
+	}
+
+	if (zend_do_fcall_by_name_function) {
+		return zend_do_fcall_by_name_function(frame);
 	}
 
 	return ZEND_USER_OPCODE_DISPATCH;
@@ -327,6 +354,8 @@ PHP_MINIT_FUNCTION(memoize)
 	zend_set_user_opcode_handler(ZEND_DO_UCALL, php_memoize_ucall);
 	zend_do_fcall_function = zend_get_user_opcode_handler(ZEND_DO_FCALL);
 	zend_set_user_opcode_handler(ZEND_DO_FCALL, php_memoize_fcall);
+	zend_do_fcall_by_name_function = zend_get_user_opcode_handler(ZEND_DO_FCALL_BY_NAME);
+	zend_set_user_opcode_handler(ZEND_DO_FCALL_BY_NAME, php_memoize_fcall_by_name);
 
 	return SUCCESS;
 }
@@ -348,6 +377,7 @@ PHP_MSHUTDOWN_FUNCTION(memoize)
 	zend_set_user_opcode_handler(ZEND_RETURN, zend_return_function);
 	zend_set_user_opcode_handler(ZEND_DO_UCALL, zend_do_ucall_function);
 	zend_set_user_opcode_handler(ZEND_DO_FCALL, zend_do_fcall_function);
+	zend_set_user_opcode_handler(ZEND_DO_FCALL_BY_NAME, zend_do_fcall_by_name_function);
 
 	UNREGISTER_INI_ENTRIES();
 
@@ -398,6 +428,7 @@ PHP_MINFO_FUNCTION(memoize)
 /* {{{ */
 static const zend_module_dep php_memoize_deps[] = {
 	ZEND_MOD_REQUIRED("APCu")
+	ZEND_MOD_REQUIRED("SPL")
 	ZEND_MOD_END
 }; /* }}} */
 

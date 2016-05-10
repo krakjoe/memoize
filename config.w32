@@ -6,5 +6,6 @@ ARG_ENABLE("memoize", "enable memoize support", "no");
 if (PHP_MEMOIZE != "no") {
 	EXTENSION("memoize", "memoize.c", PHP_EXTNAME_SHARED, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
 	ADD_EXTENSION_DEP("memoize", "APCu");
+	ADD_EXTENSION_DEP("memoize", "SPL");
 }
 
