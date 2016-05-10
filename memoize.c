@@ -30,6 +30,7 @@
 #include "ext/spl/spl_exceptions.h"
 #include "zend_smart_str.h"
 #include "zend_extensions.h"
+#include "zend_interfaces.h"
 
 #include "php_memoize.h"
 
@@ -42,6 +43,8 @@ typedef struct _php_memoize_info_t {
 
 #define PHP_MEMOIZE_USED     0x00000001
 #define PHP_MEMOIZE_DISABLED 0x00000010
+
+#define PHP_MEMOIZE_SCOPE_FAILURE ((zend_string*) -1)
 
 int php_memoize_reserved;
 
@@ -90,7 +93,6 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 	zval serial;
 	uint32_t it;
 	smart_str smart = {0};
-	zend_bool exception = 0;
 
 	array_init(&serial);
 
@@ -116,32 +118,70 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 } /* }}} */
 
 /* {{{ */
-static inline zend_string* php_memoize_key(const zend_function *function, uint32_t argc, const zval *argv) {
+static inline zend_string* php_memoize_scope(const zval *This, const zend_function *function) {
+	if (Z_TYPE_P(This) != IS_OBJECT) {
+		if (function->common.scope) {
+			return zend_string_copy(function->common.scope->name);
+		}
+	} else {
+		smart_str smart = {0};
+		php_serialize_data_t data;
+
+		if (Z_OBJCE_P(This)->serialize == zend_class_serialize_deny) {
+			return PHP_MEMOIZE_SCOPE_FAILURE;
+		}
+
+		PHP_VAR_SERIALIZE_INIT(data);
+		php_var_serialize(&smart, (zval*) This, &data);
+		PHP_VAR_SERIALIZE_DESTROY(data);
+
+		if (EG(exception)) {
+			smart_str_free(&smart);
+			zend_clear_exception();
+
+			return PHP_MEMOIZE_SCOPE_FAILURE;
+		}
+
+		return smart.s;
+	}
+
+	return NULL;
+} /* }}} */
+
+/* {{{ */
+static inline zend_string* php_memoize_key(const zval *This, const zend_function *function, uint32_t argc, const zval *argv) {
 	zend_string *key;
-	zend_class_entry *scope = function->common.scope;
+	zend_string *scope = php_memoize_scope(This, function);
 	zend_string *name = function->common.function_name;
 	zend_string *args = php_memoize_args(argc, argv);
-
+	
 	if (!args) {
 		return NULL;
 	}
 
+	if (scope == PHP_MEMOIZE_SCOPE_FAILURE) {
+		return NULL;
+	}
+
 	key = zend_string_alloc(scope ? 
-		ZSTR_LEN(scope->name) + ZSTR_LEN(name) + ZSTR_LEN(args) + sizeof("::") :
+		ZSTR_LEN(scope) + ZSTR_LEN(name) + ZSTR_LEN(args) + sizeof("::") :
 		ZSTR_LEN(name) + ZSTR_LEN(args), 0);
 
-	if (function->common.scope) {
-		memcpy(&ZSTR_VAL(key)[0], ZSTR_VAL(scope->name), ZSTR_LEN(scope->name));
-		memcpy(&ZSTR_VAL(key)[ZSTR_LEN(scope->name)], ZSTR_VAL(name), ZSTR_LEN(name));
-		memcpy(&ZSTR_VAL(key)[ZSTR_LEN(scope->name) + ZSTR_LEN(name)], ZSTR_VAL(args), ZSTR_LEN(args));
+	if (scope) {
+		memcpy(&ZSTR_VAL(key)[0], ZSTR_VAL(scope), ZSTR_LEN(scope));
+		memcpy(&ZSTR_VAL(key)[ZSTR_LEN(scope)], ZSTR_VAL(name), ZSTR_LEN(name));
+		memcpy(&ZSTR_VAL(key)[ZSTR_LEN(scope) + ZSTR_LEN(name)], ZSTR_VAL(args), ZSTR_LEN(args));
 	} else {
 		memcpy(&ZSTR_VAL(key)[0], ZSTR_VAL(name), ZSTR_LEN(name));
 		memcpy(&ZSTR_VAL(key)[ZSTR_LEN(name)], ZSTR_VAL(args), ZSTR_LEN(args));
 	}
 	ZSTR_VAL(key)[ZSTR_LEN(key)] = 0;
 
+	if (scope) {
+		zend_string_release(scope);
+	}
 	zend_string_release(args);
-
+	
 	return key;
 } /* }}} */
 
@@ -212,6 +252,7 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) 
 	if (call && php_memoize_is_memoizing(fbc, NULL)) {
 		const zend_op *opline = frame->opline;
 		zend_string *key = php_memoize_key(
+			&call->This,
 			fbc,
 			ZEND_CALL_NUM_ARGS(call), ZEND_CALL_ARG(call, 1));
 		zval *return_value;
@@ -298,6 +339,7 @@ static int php_memoize_return(zend_execute_data *frame) {
 
 	if (MG(ini.enabled) && php_memoize_is_memoizing(fbc, &ttl)) {
 		zend_string *key = php_memoize_key(
+			&frame->This,
 			fbc, 
 			ZEND_CALL_NUM_ARGS(frame), ZEND_CALL_ARG(frame, 1));
 
