@@ -34,24 +34,24 @@
 
 #include "php_memoize.h"
 
-typedef int (*zend_vm_func_f)(zend_execute_data *);
+static zend_long php_memoize_unused = -1;
+#define PHP_MEMOIZE_UNUSED &php_memoize_unused
 
-typedef struct _php_memoize_info_t {
-	zend_uchar flags;
-	zend_ulong ttl;
-} php_memoize_info_t;
+typedef zend_long php_memoize_info_t;
 
 #define PHP_MEMOIZE_USED     0x00000001
 
 #define PHP_MEMOIZE_SCOPE_FAILURE ((zend_string*) -1)
 
-int php_memoize_reserved;
+static int php_memoize_reserved;
 
 #define PHP_MEMOIZE_INFO(f) (php_memoize_info_t*) ((f)->op_array.reserved[php_memoize_reserved])
 #define PHP_MEMOIZE_INFO_SET(f, i) do { \
 	php_memoize_info_t **_i = (php_memoize_info_t**) &(f)->op_array.reserved[php_memoize_reserved]; \
 	*_i = (i); \
 } while(0)
+
+typedef int (*zend_vm_func_f)(zend_execute_data *);
 
 zend_vm_func_f zend_return_function;
 zend_vm_func_f zend_do_ucall_function;
@@ -60,7 +60,7 @@ zend_vm_func_f zend_do_fcall_by_name_function;
 
 apc_sma_api_decl(php_memoize_sma);
 
-apc_cache_t* php_memoize_cache = NULL;
+static apc_cache_t* php_memoize_cache = NULL;
 
 apc_sma_api_impl(php_memoize_sma, &php_memoize_cache, apc_cache_default_expunge);
 
@@ -189,7 +189,48 @@ static inline zend_string* php_memoize_key(const zval *This, const zend_function
 } /* }}} */
 
 /* {{{ */
-static inline zend_bool php_memoize_is_memoizing(const zend_function *function, zend_ulong *ttl) {
+static inline php_memoize_info_t* php_memoize_info_jit(const zend_function *check) {
+	if (check->op_array.doc_comment && ZSTR_LEN(check->op_array.doc_comment) >= (sizeof("@memoize")-1)) {
+		const char *mem = 
+			strstr(
+				ZSTR_VAL(check->op_array.doc_comment), "@memoize");
+
+		if (mem != NULL) {
+			php_memoize_info_t *info = 
+				(php_memoize_info_t*) ecalloc(1, sizeof(php_memoize_info_t));
+
+			PHP_MEMOIZE_INFO_SET(check, info);
+
+			if (check->common.fn_flags & ZEND_ACC_GENERATOR) {
+				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize generator");
+			}
+
+			if (check->common.fn_flags & ZEND_ACC_CTOR) {
+				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize constructor");
+			}
+
+			if (check->common.fn_flags & ZEND_ACC_CLOSURE) {
+				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize closure");
+			}
+
+			if (sscanf(mem,
+				"@memoize(%ld)", info) == 1) {
+				if ((*info) < 0) {
+					zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize with negative ttl");
+				}
+			}
+
+			return info;
+		}
+	}
+
+	PHP_MEMOIZE_INFO_SET(check, PHP_MEMOIZE_UNUSED);
+
+	return PHP_MEMOIZE_UNUSED;
+} /* }}} */
+
+/* {{{ */
+static inline zend_bool php_memoize_is_memoizing(const zend_function *function, zend_long *ttl) {
 	const zend_function *check = function;
 
 	do {
@@ -197,54 +238,27 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 			php_memoize_info_t *info = PHP_MEMOIZE_INFO(check);
 
 			if (!info) {
-				info = (php_memoize_info_t*) 
-					ecalloc(1, sizeof(php_memoize_info_t));
+				info = php_memoize_info_jit(check);
 
-				PHP_MEMOIZE_INFO_SET(check, info);
-
-				if (check->op_array.doc_comment && ZSTR_LEN(check->op_array.doc_comment) >= (sizeof("@memoize")-1)) {
-					const char *mem = 
-						strstr(
-							ZSTR_VAL(check->op_array.doc_comment), "@memoize");
-
-					if (mem != NULL) {
-						if (check->common.fn_flags & ZEND_ACC_GENERATOR) {
-							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
-								"cannot memoize generator");
-							return 0;
-						}
-
-						if (check->common.fn_flags & ZEND_ACC_CTOR) {
-							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
-								"cannot memoize constructor");
-							return 0;
-						}
-
-						if (check->common.fn_flags & ZEND_ACC_CLOSURE) {
-							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
-								"cannot memoize closure");
-							return 0;
-						}
-
-						sscanf(mem,
-							"@memoize(%lu)", &info->ttl);
-						info->flags |= PHP_MEMOIZE_USED;
-					}
-				}
-			}
-
-			if (!(info->flags & PHP_MEMOIZE_USED)) {
-				if ((check->common.fn_flags & ZEND_ACC_CLOSURE) || !check->common.prototype) {
+				if (EG(exception)) {
 					return 0;
 				}
-			} else {
-				if (ttl && info->ttl) {
-					*ttl = info->ttl;
-				}
-				return 1;
 			}
+
+			if (info == PHP_MEMOIZE_UNUSED) {
+				if (check->common.prototype && !(check->common.fn_flags & ZEND_ACC_CLOSURE)) {
+					check = check->common.prototype;
+					continue;
+				}
+				break;
+			}
+
+			if (ttl) {
+				*ttl = *info;
+			}
+			return 1;
 		}
-	} while (!(check->common.fn_flags & ZEND_ACC_CLOSURE) && (check = check->common.prototype));
+	} while (0);
 
 	return 0;
 } /* }}} */
@@ -341,7 +355,7 @@ static int php_memoize_fcall_by_name(zend_execute_data *frame) {
 
 /* {{{ */
 static int php_memoize_return(zend_execute_data *frame) {
-	zend_ulong ttl = 0;
+	zend_long ttl = 0;
 	const zend_function *fbc = frame->func;
 
 	if (MG(ini.enabled) && php_memoize_is_memoizing(fbc, &ttl)) {
@@ -352,7 +366,7 @@ static int php_memoize_return(zend_execute_data *frame) {
 
 		if (key) {
 			apc_cache_store(php_memoize_cache, key, 
-				ZEND_CALL_VAR(frame, frame->opline->op1.var), (zend_long) ttl, 1);
+				ZEND_CALL_VAR(frame, frame->opline->op1.var), ttl, 1);
 
 			if (EG(exception)) {
 				zend_clear_exception();
@@ -372,7 +386,8 @@ static int php_memoize_return(zend_execute_data *frame) {
 /* {{{ */
 static inline void php_memoize_info_dtor(zend_op_array *op_array) {
 	php_memoize_info_t *info = PHP_MEMOIZE_INFO((zend_function*) op_array);
-	if (info) {
+
+	if (info && info != PHP_MEMOIZE_UNUSED) {
 		efree(info);
 	}
 } /* }}} */
