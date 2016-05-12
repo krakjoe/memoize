@@ -39,8 +39,6 @@ static zend_long php_memoize_unused = -1;
 
 typedef zend_long php_memoize_info_t;
 
-#define PHP_MEMOIZE_USED     0x00000001
-
 #define PHP_MEMOIZE_SCOPE_FAILURE ((zend_string*) -1)
 
 static int php_memoize_reserved;
