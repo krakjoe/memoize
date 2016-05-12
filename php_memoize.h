@@ -49,7 +49,6 @@ ZEND_BEGIN_MODULE_GLOBALS(memoize)
 		zend_bool smart;
 		zend_bool enabled;
 	} ini;
-	HashTable info;
 ZEND_END_MODULE_GLOBALS(memoize)
 
 #ifdef ZTS

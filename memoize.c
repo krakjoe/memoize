@@ -52,7 +52,6 @@ int php_memoize_reserved;
 #define PHP_MEMOIZE_INFO_SET(f, i) do { \
 	php_memoize_info_t **_i = (php_memoize_info_t**) &(f)->op_array.reserved[php_memoize_reserved]; \
 	*_i = (i); \
-	zend_hash_next_index_insert_ptr(&MG(info), i); \
 } while(0)
 
 zend_vm_func_f zend_return_function;
@@ -370,6 +369,35 @@ static int php_memoize_return(zend_execute_data *frame) {
 	return ZEND_USER_OPCODE_DISPATCH;
 } /* }}} */
 
+/* {{{ */
+static inline void php_memoize_info_dtor(zend_op_array *op_array) {
+	php_memoize_info_t *info = PHP_MEMOIZE_INFO((zend_function*) op_array);
+	if (info) {
+		efree(info);
+	}
+} /* }}} */
+
+/* {{{ */
+/* not exported on purpose */ zend_extension zend_extension_entry = {
+	PHP_MEMOIZE_EXTNAME,
+	PHP_MEMOIZE_VERSION,
+	"Joe Watkins <krakjoe@php.net>",
+	"https://github.com/krakjoe/memoize",
+	"Copyright (c) 2016",
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL, /* op_array_handler_func_t */
+	NULL, /* statement_handler_func_t */
+	NULL, /* fcall_begin_handler_func_t */
+	NULL, /* fcall_end_handler_func_t */
+	NULL, /* op_array_ctor_func_t */
+	php_memoize_info_dtor,
+	STANDARD_ZEND_EXTENSION_PROPERTIES
+}; /* }}} */
+
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(memoize)
@@ -378,9 +406,11 @@ PHP_MINIT_FUNCTION(memoize)
 
 	REGISTER_INI_ENTRIES();
 
-	if (MG(ini.enabled) && !MG(initialized)) {
-		zend_extension dummy;
+	if (!zend_get_extension("memoize")) {
+		zend_register_extension(&zend_extension_entry, NULL);
+	}
 
+	if (MG(ini.enabled) && !MG(initialized)) {
 		MG(initialized) = 1;
 
 		php_memoize_sma.init(MG(ini.segs), MG(ini.size), NULL);
@@ -391,7 +421,7 @@ PHP_MINIT_FUNCTION(memoize)
 			MG(ini.entries), MG(ini.ttl), MG(ini.ttl), MG(ini.smart), 1
 		);
 
-		php_memoize_reserved = zend_get_resource_handle(&dummy);
+		php_memoize_reserved = zend_get_resource_handle(&zend_extension_entry);
 	}
 
 	zend_return_function = zend_get_user_opcode_handler(ZEND_RETURN);
@@ -431,11 +461,6 @@ PHP_MSHUTDOWN_FUNCTION(memoize)
 }
 /* }}} */
 
-/* {{{ */
-static void php_memoize_info_dtor(zval *zv) {
-	efree(Z_PTR_P(zv));
-} /* }}} */
-
 /* {{{ PHP_RINIT_FUNCTION
  */
 PHP_RINIT_FUNCTION(memoize)
@@ -443,8 +468,6 @@ PHP_RINIT_FUNCTION(memoize)
 #if defined(COMPILE_DL_MEMOIZE) && defined(ZTS)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
-
-	zend_hash_init(&MG(info), 8, NULL, php_memoize_info_dtor, 0);
 
 	return SUCCESS;
 }
@@ -454,7 +477,6 @@ PHP_RINIT_FUNCTION(memoize)
  */
 PHP_RSHUTDOWN_FUNCTION(memoize)
 {
-	zend_hash_destroy(&MG(info));
 	return SUCCESS;
 }
 /* }}} */
