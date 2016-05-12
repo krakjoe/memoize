@@ -96,23 +96,43 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 	uint32_t it;
 	smart_str smart = {0};
 
-	array_init(&serial);
+	ZVAL_UNDEF(&serial);
 
-	for (it = 0; it < argc; it++) {
-		if (add_index_zval(&serial, it, (zval*) argv + it) == SUCCESS) {
-			Z_TRY_ADDREF_P((zval*) argv + it);
+	switch (argc) {
+		case 0:
+			return zend_string_copy(CG(empty_string));
+
+		case 1: {
+			if (Z_TYPE_P(argv) == IS_STRING) {
+				return zend_string_copy(Z_STR_P(argv));
+			}
+
+			ZVAL_COPY(&serial, argv);
 		}
-	}
 
-	PHP_VAR_SERIALIZE_INIT(data);
-	php_var_serialize(&smart, &serial, &data);
-	PHP_VAR_SERIALIZE_DESTROY(data);
+		/* intentionally fall through */
 
-	if (EG(exception)) {
-		zval_ptr_dtor(&serial);
-		smart_str_free(&smart);
-		zend_clear_exception();
-		return NULL;
+		default: {
+			if (Z_TYPE(serial) == IS_UNDEF) {
+				array_init(&serial);
+
+				for (it = 0; it < argc; it++) {
+					if (add_index_zval(&serial, it, (zval*) argv + it) == SUCCESS) {
+						Z_TRY_ADDREF_P((zval*) argv + it);
+					}
+				}	
+			}
+
+			PHP_VAR_SERIALIZE_INIT(data);
+			php_var_serialize(&smart, &serial, &data);
+			PHP_VAR_SERIALIZE_DESTROY(data);
+
+			if (EG(exception)) {
+				zval_ptr_dtor(&serial);
+				zend_clear_exception();
+				return NULL;
+			}
+		}
 	}
 
 	zval_ptr_dtor(&serial);
