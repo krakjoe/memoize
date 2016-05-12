@@ -191,37 +191,42 @@ static inline zend_string* php_memoize_key(const zval *This, const zend_function
 /* {{{ */
 static inline php_memoize_info_t* php_memoize_info_jit(const zend_function *check) {
 	if (check->op_array.doc_comment && ZSTR_LEN(check->op_array.doc_comment) >= (sizeof("@memoize")-1)) {
-		const char *mem = 
-			strstr(
-				ZSTR_VAL(check->op_array.doc_comment), "@memoize");
+		do {
+			const char *mem = strstr(ZSTR_VAL(check->op_array.doc_comment), "@memoize");
 
-		if (mem != NULL) {
-			php_memoize_info_t *info = 
-				(php_memoize_info_t*) ecalloc(1, sizeof(php_memoize_info_t));
+			if (mem != NULL) {
+				php_memoize_info_t *info;
 
-			PHP_MEMOIZE_INFO_SET(check, info);
-
-			if (check->common.fn_flags & ZEND_ACC_GENERATOR) {
-				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize generator");
-			}
-
-			if (check->common.fn_flags & ZEND_ACC_CTOR) {
-				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize constructor");
-			}
-
-			if (check->common.fn_flags & ZEND_ACC_CLOSURE) {
-				zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize closure");
-			}
-
-			if (sscanf(mem,
-				"@memoize(%ld)", info) == 1) {
-				if ((*info) < 0) {
-					zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize with negative ttl");
+				if (check->common.fn_flags & ZEND_ACC_GENERATOR) {
+					zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize generator");
+					break;
 				}
-			}
 
-			return info;
-		}
+				if (check->common.fn_flags & ZEND_ACC_CTOR) {
+					zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize constructor");
+					break;
+				}
+
+				if (check->common.fn_flags & ZEND_ACC_CLOSURE) {
+					zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize closure");
+					break;
+				}
+
+				info = (php_memoize_info_t*) ecalloc(1, sizeof(php_memoize_info_t));
+
+				if (sscanf(mem, "@memoize(%ld)", info) == 1) {
+					if ((*info) < 0) {
+						zend_throw_exception_ex(spl_ce_RuntimeException, 0, "cannot memoize with negative ttl");
+						efree(info);
+						break;
+					}
+				}
+
+				PHP_MEMOIZE_INFO_SET(check, info);
+
+				return info;
+			}
+		} while (0);
 	}
 
 	PHP_MEMOIZE_INFO_SET(check, PHP_MEMOIZE_UNUSED);
