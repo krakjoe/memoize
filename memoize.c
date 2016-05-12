@@ -72,8 +72,14 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("memoize.entries", "4093", PHP_INI_SYSTEM, OnUpdateLong, ini.entries, zend_memoize_globals, memoize_globals)
     STD_PHP_INI_ENTRY("memoize.ttl", "0", PHP_INI_SYSTEM, OnUpdateLong, ini.ttl, zend_memoize_globals, memoize_globals)
     STD_PHP_INI_ENTRY("memoize.smart", "1", PHP_INI_SYSTEM, OnUpdateBool, ini.smart, zend_memoize_globals, memoize_globals)
+    STD_PHP_INI_ENTRY("memoize.debug", "0", PHP_INI_SYSTEM, OnUpdateBool, ini.debug, zend_memoize_globals, memoize_globals)
 PHP_INI_END()
 /* }}} */
+
+/* {{{ */
+static inline time_t php_memoize_time(void) {
+	return MG(ini.debug) ? time(NULL) : sapi_get_request_time();
+} /* }}} */
 
 /* {{{ php_memoize_init_globals
  */
@@ -285,7 +291,7 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *frame) 
 
 		return_value = ZEND_CALL_VAR(frame, opline->result.var);
 
-		if (apc_cache_fetch(php_memoize_cache, key, sapi_get_request_time(), &return_value)) {
+		if (apc_cache_fetch(php_memoize_cache, key, php_memoize_time(), &return_value)) {
 			zend_string_release(key);
 			return 1;
 		}

@@ -48,6 +48,7 @@ ZEND_BEGIN_MODULE_GLOBALS(memoize)
 		zend_long ttl;
 		zend_bool smart;
 		zend_bool enabled;
+		zend_bool debug;
 	} ini;
 ZEND_END_MODULE_GLOBALS(memoize)
 
