@@ -278,7 +278,6 @@ static inline zend_bool php_memoize_is_memoized(const zend_execute_data *execute
 	const zend_function *fbc = call->func;
 
 	if (call && php_memoize_is_memoizing(fbc, NULL)) {
-		const zend_op *opline = EX(opline);
 		zend_string *key = php_memoize_key(
 			&call->This,
 			fbc,
