@@ -49,6 +49,10 @@ static int php_memoize_reserved;
 	*_i = (i); \
 } while(0)
 
+#define PHP_MEMOIZE_STRING_TRUE MG(strings)[0]
+#define PHP_MEMOIZE_STRING_FALSE MG(strings)[1]
+#define PHP_MEMOIZE_STRING_NULL MG(strings)[2]
+
 typedef int (*zend_vm_func_f)(zend_execute_data *);
 
 zend_vm_func_f zend_return_function;
@@ -103,8 +107,22 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 			return zend_string_copy(CG(empty_string));
 
 		case 1: {
-			if (Z_TYPE_P(argv) == IS_STRING) {
-				return zend_string_copy(Z_STR_P(argv));
+			switch (Z_TYPE_P(argv)) {
+				case IS_STRING:
+					return zend_string_copy(Z_STR_P(argv));
+
+				case IS_LONG:
+				case IS_DOUBLE:
+					return zval_get_string((zval*) argv);
+
+				case IS_TRUE:
+					return zend_string_copy(PHP_MEMOIZE_STRING_TRUE);
+
+				case IS_FALSE:
+					return zend_string_copy(PHP_MEMOIZE_STRING_FALSE);
+
+				case IS_NULL:
+					return zend_string_copy(PHP_MEMOIZE_STRING_NULL);
 			}
 
 			ZVAL_COPY(&serial, argv);
@@ -518,6 +536,10 @@ PHP_RINIT_FUNCTION(memoize)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
+	PHP_MEMOIZE_STRING_TRUE = zend_string_init(ZEND_STRL("true"), 0);
+	PHP_MEMOIZE_STRING_FALSE = zend_string_init(ZEND_STRL("false"), 0);
+	PHP_MEMOIZE_STRING_NULL = zend_string_init(ZEND_STRL("null"), 0);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -526,6 +548,10 @@ PHP_RINIT_FUNCTION(memoize)
  */
 PHP_RSHUTDOWN_FUNCTION(memoize)
 {
+	zend_string_release(PHP_MEMOIZE_STRING_TRUE);
+	zend_string_release(PHP_MEMOIZE_STRING_FALSE);
+	zend_string_release(PHP_MEMOIZE_STRING_NULL);
+
 	return SUCCESS;
 }
 /* }}} */
