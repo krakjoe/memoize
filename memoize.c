@@ -42,7 +42,6 @@ typedef struct _php_memoize_info_t {
 } php_memoize_info_t;
 
 #define PHP_MEMOIZE_USED     0x00000001
-#define PHP_MEMOIZE_DISABLED 0x00000010
 
 #define PHP_MEMOIZE_SCOPE_FAILURE ((zend_string*) -1)
 
@@ -234,10 +233,6 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 				}
 			}
 
-			if (info->flags & PHP_MEMOIZE_DISABLED) {
-				return 0;
-			}
-
 			if (!(info->flags & PHP_MEMOIZE_USED)) {
 				if ((check->common.fn_flags & ZEND_ACC_CLOSURE) || !check->common.prototype) {
 					return 0;
@@ -360,10 +355,6 @@ static int php_memoize_return(zend_execute_data *frame) {
 				ZEND_CALL_VAR(frame, frame->opline->op1.var), (zend_long) ttl, 1);
 
 			if (EG(exception)) {
-				php_memoize_info_t *info = PHP_MEMOIZE_INFO(fbc);
-
-				info->flags |= PHP_MEMOIZE_DISABLED;
-
 				zend_clear_exception();
 			}
 

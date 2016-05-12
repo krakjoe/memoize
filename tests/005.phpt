@@ -29,4 +29,4 @@ array(2) {
   }
 }
 float(0)
-float(1)
+float(2)
