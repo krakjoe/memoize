@@ -155,12 +155,15 @@ static inline zend_string* php_memoize_key(const zval *This, const zend_function
 	zend_string *scope = php_memoize_scope(This, function);
 	zend_string *name = function->common.function_name;
 	zend_string *args = php_memoize_args(argc, argv);
-	
+
 	if (!args) {
 		return NULL;
 	}
 
 	if (scope == PHP_MEMOIZE_SCOPE_FAILURE) {
+		if (args) {
+			zend_string_release(args);
+		}
 		return NULL;
 	}
 
