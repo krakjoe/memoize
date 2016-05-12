@@ -218,6 +218,12 @@ static inline zend_bool php_memoize_is_memoizing(const zend_function *function, 
 							return 0;
 						}
 
+						if (check->common.fn_flags & ZEND_ACC_CLOSURE) {
+							zend_throw_exception_ex(spl_ce_RuntimeException, 0,
+								"cannot memoize closure");
+							return 0;
+						}
+
 						sscanf(mem,
 							"@memoize(%lu)", &info->ttl);
 						info->flags |= PHP_MEMOIZE_USED;
