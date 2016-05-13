@@ -52,6 +52,7 @@ static int php_memoize_reserved;
 #define PHP_MEMOIZE_STRING_TRUE MG(strings)[0]
 #define PHP_MEMOIZE_STRING_FALSE MG(strings)[1]
 #define PHP_MEMOIZE_STRING_NULL MG(strings)[2]
+#define PHP_MEMOIZE_STRING_EMPTY MG(strings)[3]
 
 typedef int (*zend_vm_func_f)(zend_execute_data *);
 
@@ -94,7 +95,7 @@ static void php_memoize_init_globals(zend_memoize_globals *mg)
 /* }}} */
 
 /* {{{ */
-static inline zend_string* php_memoize_string(zend_string *string) {
+static inline zend_string* php_memoize_string(const zend_string *string) {
 	zend_string *memoized = zend_string_alloc(ZSTR_LEN(string) + sizeof("{}") - 1, 0);
 
 	memcpy(&ZSTR_VAL(memoized)[0], "{", sizeof("{")-1);
@@ -102,6 +103,15 @@ static inline zend_string* php_memoize_string(zend_string *string) {
 	memcpy(&ZSTR_VAL(memoized)[sizeof("{")-1 + ZSTR_LEN(string)], "}", sizeof("}")-1);
 	ZSTR_VAL(memoized)[ZSTR_LEN(memoized)]=0;
 
+	return memoized;
+} /* }}} */
+
+/* {{{ */
+static inline zend_string* php_memoize_numeric(const zval *zv) {
+	zend_string *string = zval_get_string((zval*) zv);
+	zend_string *memoized = 
+		php_memoize_string(string);
+	zend_string_release(string);
 	return memoized;
 } /* }}} */
 
@@ -116,16 +126,16 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 
 	switch (argc) {
 		case 0:
-			return zend_string_copy(CG(empty_string));
+			return zend_string_copy(PHP_MEMOIZE_STRING_EMPTY);
 
 		case 1: {
 			switch (Z_TYPE_P(argv)) {
 				case IS_STRING:
-					return zend_string_copy(Z_STR_P(argv));
+					return php_memoize_string(Z_STR_P(argv));
 
 				case IS_LONG:
 				case IS_DOUBLE:
-					return zval_get_string((zval*) argv);
+					return php_memoize_numeric(argv);
 
 				case IS_TRUE:
 					return zend_string_copy(PHP_MEMOIZE_STRING_TRUE);
@@ -551,6 +561,7 @@ PHP_RINIT_FUNCTION(memoize)
 	PHP_MEMOIZE_STRING_TRUE = zend_string_init(ZEND_STRL("{b:1;}"), 0);
 	PHP_MEMOIZE_STRING_FALSE = zend_string_init(ZEND_STRL("{b:0;}"), 0);
 	PHP_MEMOIZE_STRING_NULL = zend_string_init(ZEND_STRL("{N;}"), 0);
+	PHP_MEMOIZE_STRING_EMPTY = zend_string_init(ZEND_STRL("{E;}"), 0);
 
 	return SUCCESS;
 }
@@ -563,6 +574,7 @@ PHP_RSHUTDOWN_FUNCTION(memoize)
 	zend_string_release(PHP_MEMOIZE_STRING_TRUE);
 	zend_string_release(PHP_MEMOIZE_STRING_FALSE);
 	zend_string_release(PHP_MEMOIZE_STRING_NULL);
+	zend_string_release(PHP_MEMOIZE_STRING_EMPTY);
 
 	return SUCCESS;
 }

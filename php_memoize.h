@@ -50,7 +50,7 @@ ZEND_BEGIN_MODULE_GLOBALS(memoize)
 		zend_bool enabled;
 		zend_bool debug;
 	} ini;
-	zend_string *strings[3];
+	zend_string *strings[4];
 ZEND_END_MODULE_GLOBALS(memoize)
 
 #ifdef ZTS
