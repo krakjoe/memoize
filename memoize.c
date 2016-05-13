@@ -536,9 +536,9 @@ PHP_RINIT_FUNCTION(memoize)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
 
-	PHP_MEMOIZE_STRING_TRUE = zend_string_init(ZEND_STRL("true"), 0);
-	PHP_MEMOIZE_STRING_FALSE = zend_string_init(ZEND_STRL("false"), 0);
-	PHP_MEMOIZE_STRING_NULL = zend_string_init(ZEND_STRL("null"), 0);
+	PHP_MEMOIZE_STRING_TRUE = zend_string_init(ZEND_STRL("{b:1;}"), 0);
+	PHP_MEMOIZE_STRING_FALSE = zend_string_init(ZEND_STRL("{b:0;}"), 0);
+	PHP_MEMOIZE_STRING_NULL = zend_string_init(ZEND_STRL("{N;}"), 0);
 
 	return SUCCESS;
 }
