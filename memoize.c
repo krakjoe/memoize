@@ -96,11 +96,12 @@ static void php_memoize_init_globals(zend_memoize_globals *mg)
 
 /* {{{ */
 static inline zend_string* php_memoize_string(const zend_string *string) {
-	zend_string *memoized = zend_string_alloc(ZSTR_LEN(string) + sizeof("{}") - 1, 0);
+	zend_string *memoized = zend_string_alloc(ZSTR_LEN(string) + (sizeof("{}") - 1), 0);
 
 	memcpy(&ZSTR_VAL(memoized)[0], "{", sizeof("{")-1);
 	memcpy(&ZSTR_VAL(memoized)[sizeof("{")-1], ZSTR_VAL(string), ZSTR_LEN(string));
 	memcpy(&ZSTR_VAL(memoized)[sizeof("{")-1 + ZSTR_LEN(string)], "}", sizeof("}")-1);
+
 	ZSTR_VAL(memoized)[ZSTR_LEN(memoized)]=0;
 
 	return memoized;
@@ -168,6 +169,7 @@ static inline zend_string* php_memoize_args(uint32_t argc, const zval *argv) {
 			PHP_VAR_SERIALIZE_DESTROY(data);
 
 			if (EG(exception)) {
+				smart_str_free(&smart);
 				zval_ptr_dtor(&serial);
 				zend_clear_exception();
 				return NULL;
